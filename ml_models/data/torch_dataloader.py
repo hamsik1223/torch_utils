@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset, SequentialSampler, ##to convert numpy array to pytorch dateset..
+from torch.utils.data import TensorDataset, SequentialSampler ##to convert numpy array to pytorch dateset..
 from torch.utils.data.sampler import WeightedRandomSampler, RandomSampler
 
 # def create_data_loaders(x, 
