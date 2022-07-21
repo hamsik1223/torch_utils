@@ -62,7 +62,7 @@ class MLP_with_AE_model(nn.Module):
                 dropout_rates,
                 out_dim=1,
                 activation_fn = nn.SiLU()):
-        super(MLP_with_AE, self).__init__()
+        super(MLP_with_AE_model, self).__init__()
         
         self.bn = nn.BatchNorm1d(in_dim)
         self.encoder = nn.Sequential(GaussianNoise(sigma=dropout_rates[0]),
@@ -102,3 +102,58 @@ class MLP_with_AE_model(nn.Module):
             x = layer(x)
         y_mlp = self.output_dense(x)    
         return x_decoded, y_ae, y_mlp
+
+
+class Embedding_Layer(nn.Module):
+    def __init__(self,
+                embed_vocab,  
+                embed_dim):
+        super(Embedding_Layer, self).__init__()
+        
+        self.embed_layer = nn.Embedding(embed_vocab,embed_dim)
+        self.layernorm = nn.LayerNorm(embed_dim)
+      
+    def forward(self, x):
+        x = self.embed_layer(x)
+        x = self.layernorm(x)
+        x = x.flatten(1)
+        return x 
+
+
+class MLP_embedding_model(nn.Module):
+    def __init__(self,
+                in_dim,
+                embed_vocab,  
+                embed_dim ,
+                hidden_units,
+                dropout_rates,
+                out_dim=1,
+                activation_fn = nn.SiLU()):
+        super(MLP_embedding_model, self).__init__()
+        '''
+        control the output by the out_dim, and thus it can do regression or classification
+        '''
+        
+        self.bn = nn.BatchNorm1d(in_dim)
+
+        self.embedding_layer = Embedding_Layer(embed_vocab, embed_dim)
+        self.ffn_layers = nn.ModuleList([])
+
+        hidden_units = [in_dim + embed_dim * in_dim * 2] + hidden_units
+        # print('expected dim is ', in_dim + embed_dim * in_dim * 2)
+        for i in range(len(hidden_units)-1):
+            self.ffn_layers.append(FFN_layer(hidden_units[i], 
+                                             hidden_units[i+1],
+                                             activation_fn,
+                                             dropout_rates[i]))
+        self.output_dense = nn.Linear(hidden_units[-1], out_dim)
+
+    def forward(self, x, x_dis):
+        x = self.bn(x)
+        x_embed = self.embedding_layer(x_dis)
+        x = torch.cat([x, x_embed], 1)
+        # print(x.shape)
+        for layer in self.ffn_layers:
+            x = layer(x)
+        x = self.output_dense(x)    
+        return x

@@ -11,17 +11,33 @@ def set_seed(seed_value=42):
     torch.cuda.manual_seed_all(seed_value)
 
 
-def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None, epochs = 10, patience=5, debug = False, device='cpu', target = 'reg'):
-    best_accuracy = 0
-    best_roc_auc = 0
+def weight_init(m, initializer = nn.init.xavier_uniform_):
+    # https://discuss.pytorch.org/t/crossentropyloss-expected-object-of-type-torch-longtensor/28683/8?u=ptrblck
+    # https://pytorch.org/docs/stable/nn.init.html
+    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+        initializer(m.weight, gain=nn.init.calculate_gain('relu'))
+        nn.init.zeros_(m.bias)
+# model = model.apply(weight_init)
+
+
+def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None, epochs = 10, patience=5, debug = False, device='cpu', target = 'reg', verbose=True):
+    best_loss = 0
     best_model = None
     cur_patience = 0
+    train_loss_list = []
+    val_loss_list = []
 
     print('start training....\n')
-    print(
-        f"{'Epoch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Elapsed':^9} | {'Cur lr':^9}" 
-    )
-    print("-"*95)
+    if verbose:
+        if target == 'reg':
+            print(
+                f"{'Epoch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Elapsed':^9} | {'Cur lr':^9}" 
+            )
+        else:
+            print(
+                f"{'Epoch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Elapsed':^9} | {'Cur lr':^9}" 
+            )
+        print("-"*95)
     
     for epoch_i in range(epochs):
         #training....
@@ -59,11 +75,11 @@ def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None,
         # Evaluate....
         ##
         if val_dataloader is not None:
-            val_loss, val_acc, _ = evaluate(model, loss_fn, val_dataloader, device)
+            val_loss, val_acc, _ = evaluate(model, loss_fn, val_dataloader, device, target)
 
             # track the best acc
-            if val_acc > best_accuracy:
-                best_accuracy = val_acc
+            if val_loss > best_loss:
+                best_loss = val_loss
                 best_model = copy.deepcopy(model)
                 cur_patience = 0
             else:
@@ -71,21 +87,29 @@ def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None,
             
             # print the performance:
             time_elapsed = time.time() - t0_epoch
-            print(
-                f"{epoch_i + 1:^7} | {avg_train_loss:^12.6f} | {val_loss:^10.6f} | {val_acc:^9.2f} | {time_elapsed:^9.2f} | {cur_lr:^9.4f}"
-            )
+            if verbose:
+                if target == 'reg':
+                    print(
+                        f"{epoch_i + 1:^7} | {avg_train_loss:^12.6f} | {val_loss:^10.6f} | {time_elapsed:^9.2f} | {cur_lr:^9.4f}"
+                    )
+                else:
+                    print(
+                        f"{epoch_i + 1:^7} | {avg_train_loss:^12.6f} | {val_loss:^10.6f} | {val_acc:^9.2f} | {time_elapsed:^9.2f} | {cur_lr:^9.4f}"
+                    )
+            train_loss_list.append(avg_train_loss)
+            val_loss_list.append(val_loss)
 
         if cur_patience == patience:
-            print('early stopping..., Best acc is ', round(best_accuracy, 4))
+            print('early stopping..., Best loss is ', round(best_loss, 4))
             return best_model
     
     print('\n')
-    print(f"Training complete! Best acc: {best_accuracy:.4f}%.")
+    print(f"Training complete! Best loss: {best_loss:.4f}.")
 
-    return best_model
+    return best_model, [train_loss_list, val_loss_list]
 
 
-def evaluate(model, loss_fn, val_dataloader, device):
+def evaluate(model, loss_fn, val_dataloader, device, target = 'reg'):
     model.eval()
 
     # tracking variables 
@@ -109,16 +133,20 @@ def evaluate(model, loss_fn, val_dataloader, device):
         preds = torch.argmax(logits, dim=1).flatten()
         
         ## calculate the acc rate
-
-        acc = (preds == b_labels).cpu().numpy().mean()*100
+        if target == 'clf':
+            acc = (preds == b_labels).cpu().numpy().mean()*100
+            val_acc.append(acc)
         val_loss+=loss.item()
-        val_acc.append(acc)
         val_labels_list.append(b_labels)
 
         val_pred_logits_list.append(logits)
 
     val_loss = val_loss / len(val_dataloader)
-    val_acc = np.mean(val_acc)
+    
+    if target=='clf':
+        val_acc = np.mean(val_acc)
+    else:
+        val_acc = None
 
     val_labels = torch.cat(val_labels_list)
     val_pred_proba = torch.softmax(torch.cat(val_pred_logits_list), 1)
@@ -127,7 +155,7 @@ def evaluate(model, loss_fn, val_dataloader, device):
                  val_pred_proba]
 
     return val_loss, val_acc, deep_info
-
+    
 # def validation(dataloader, model, loss_fn, device, target = 'reg'):
 #     size = len(dev_dataloader.dataset)
 #     num_batches = len(dev_dataloader)
