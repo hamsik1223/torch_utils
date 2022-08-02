@@ -34,7 +34,13 @@ def data_loader(*array,
                 bsz = 64,
                 down_sample_factor=0.1,
                 pc=False):
-    array = tuple(torch.tensor(data) for data in array)
+    array_new = []
+    for data in array:
+        if data.dtype == 'int':
+            array_new.append( torch.tensor(data).long() )
+        else:
+            array_new.append( torch.tensor(data) )
+    array = array_new
     if not dev_mode:
         train_data = TensorDataset(*array)
         if pc:
