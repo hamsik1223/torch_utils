@@ -30,13 +30,16 @@ class MLP_model(nn.Module):
                 hidden_units,
                 dropout_rates,
                 out_dim=1,
-                activation_fn = nn.SiLU()):
+                activation_fn = nn.SiLU(),
+                use_bn=True):
         super(MLP_model, self).__init__()
         '''
         control the output by the out_dim, and thus it can do regression or classification
         '''
-        
-        self.bn = nn.BatchNorm1d(in_dim)
+        if use_bn:
+            self.bn = nn.BatchNorm1d(in_dim)
+        else:
+            self.bn = None
         self.ffn_layers = nn.ModuleList([])
 
         hidden_units = [in_dim] + hidden_units
@@ -48,7 +51,8 @@ class MLP_model(nn.Module):
         self.output_dense = nn.Linear(hidden_units[-1], out_dim)
 
     def forward(self, x):
-        x = self.bn(x)
+        if self.bn:
+            x = self.bn(x)
         for layer in self.ffn_layers:
             x = layer(x)
         x = self.output_dense(x)    
@@ -104,6 +108,7 @@ class MLP_with_AE_model(nn.Module):
         return x_decoded, y_ae, y_mlp
 
 
+### vanilla wide and deep model 
 class Embedding_Layer(nn.Module):
     def __init__(self,
                 embed_vocab,  
@@ -120,6 +125,7 @@ class Embedding_Layer(nn.Module):
         return x 
 
 
+
 class MLP_embedding_model(nn.Module):
     def __init__(self,
                 in_dim,
@@ -134,12 +140,12 @@ class MLP_embedding_model(nn.Module):
         control the output by the out_dim, and thus it can do regression or classification
         '''
         
-        self.bn = nn.BatchNorm1d(in_dim)
+        self.bn = nn.BatchNorm1d(in_dim[0])
 
         self.embedding_layer = Embedding_Layer(embed_vocab, embed_dim)
         self.ffn_layers = nn.ModuleList([])
 
-        hidden_units = [in_dim + embed_dim * in_dim * 2] + hidden_units
+        hidden_units = [in_dim[0] + embed_dim * in_dim[1]] + hidden_units
         # print('expected dim is ', in_dim + embed_dim * in_dim * 2)
         for i in range(len(hidden_units)-1):
             self.ffn_layers.append(FFN_layer(hidden_units[i], 
@@ -152,6 +158,7 @@ class MLP_embedding_model(nn.Module):
         x = self.bn(x)
         x_embed = self.embedding_layer(x_dis)
         x = torch.cat([x, x_embed], 1)
+        # print(x.shape)
         # print(x.shape)
         for layer in self.ffn_layers:
             x = layer(x)

@@ -8,8 +8,13 @@ TODO list:
 
 * Deep Learning Models *
 
-加入wide and deep等模型所需要的特征处理模块 [ ]
+加入wide and deep等模型所需要的特征处理模块 [x]
 
-加入wide and deep等推荐模型 [ ]
+加入wide and deep等推荐模型 [x]
 
-加入时间序列模型 如LSTM [ ]
+加入时间序列模型 如LSTM,CNN [ ]
+
+加入Multi-task模型 [ ]
+
+加入Few-shot learning 模块, 如Optimization-based: MAML, Metric Based: Matching Nets [ ]
+

@@ -1,4 +1,5 @@
 import torch 
+from torch import nn
 import numpy as np
 import random
 import copy 
@@ -13,6 +14,7 @@ def set_seed(seed_value=42):
 
 def weight_init(m, initializer = nn.init.xavier_uniform_):
     # https://discuss.pytorch.org/t/crossentropyloss-expected-object-of-type-torch-longtensor/28683/8?u=ptrblck
+    # https://pytorch.org/docs/stable/nn.init.html
     # https://pytorch.org/docs/stable/nn.init.html
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
         initializer(m.weight, gain=nn.init.calculate_gain('relu'))
@@ -78,7 +80,7 @@ def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None,
             val_loss, val_acc, _ = evaluate(model, loss_fn, val_dataloader, device, target)
 
             # track the best acc
-            if val_loss > best_loss:
+            if val_loss < best_loss:
                 best_loss = val_loss
                 best_model = copy.deepcopy(model)
                 cur_patience = 0
@@ -101,7 +103,7 @@ def train(model, loss_fn, optimizer, scheduler, dataloader, val_dataloader=None,
 
         if cur_patience == patience:
             print('early stopping..., Best loss is ', round(best_loss, 4))
-            return best_model
+            return best_model, [train_loss_list, val_loss_list]
     
     print('\n')
     print(f"Training complete! Best loss: {best_loss:.4f}.")
